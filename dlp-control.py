@@ -1,9 +1,10 @@
 import sys
+import os
 import serial
 import serial.tools.list_ports
 import threading
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, QVBoxLayout
-from PyQt5.QtWidgets import QWidget, QComboBox, QHBoxLayout, QTextEdit
+from PyQt5.QtWidgets import QWidget, QComboBox, QHBoxLayout, QTextEdit, QMessageBox
 from PyQt5 import QtGui, QtCore
 
 baud_rates = ["9600", "19200", "28800", "38400", "57600", "76800", "115200"]
@@ -28,7 +29,7 @@ class MyWindow(QMainWindow):
 
         # Create the baud rate dropdown
         self.dpd_baud = QComboBox()
-        self.dpd_baud.addItem("Baud Rate")
+        self.dpd_baud.setCurrentIndex(0)
         for rate in baud_rates:
             self.dpd_baud.addItem(rate)
         self.dpd_baud.setMinimumSize(100, 0)
@@ -71,8 +72,15 @@ class MyWindow(QMainWindow):
         self.photo.setMinimumHeight(500)
         self.photo.setMinimumWidth(500)
         self.photo.setText("")
-        self.photo.setStyleSheet("color: black")
-        self.photo.setPixmap(QtGui.QPixmap("cat.jpg"))
+        
+
+        if os.path.exists('image.jpg'):
+            # Load the image and display it
+            image = QtGui.QPixmap('cat.jpg')
+            self.photo.setPixmap(image)
+        else:
+            # Set the label's background color to black
+            self.photo.setStyleSheet('background-color: black')
 
         ly_image = QHBoxLayout()
         ly_image.addLayout(ly_controls)
@@ -83,8 +91,19 @@ class MyWindow(QMainWindow):
         self.setCentralWidget(widget)
 
     def connect(self):
+        port =self.dpd_port.currentText() 
+        baud = self.dpd_baud.currentText()
+
+        # Check if a valid port and baud rate are selected
+        if not self.is_valid_port(port):
+            QMessageBox.warning(self, "Error", "Please select a valid port")
+            return
+        if not self.is_valid_baud(baud):
+            QMessageBox.warning(self, "Error", "Please select a valid baud rate")
+            return
+
         # Open the serial port
-        self.serial = serial.Serial(self.dpd_port.currentText(), self.dpd_baud.currentText())
+        self.serial = serial.Serial()
 
         # Start a thread to read incoming data from the serial port
         self.t = threading.Thread(target=self.readSerial)
@@ -116,6 +135,20 @@ class MyWindow(QMainWindow):
         self.btn_connect.setText("Connect")
         self.btn_connect.clicked.disconnect(self.disconnect)
         self.btn_connect.clicked.connect(self.connect)
+
+    def is_valid_port(self, port):
+        ports = serial.tools.list_ports.comports()
+        port_names = [p.device for p in ports]
+
+        # Return True if the selection is in the list of available ports, False otherwise
+        return port in port_names
+    
+    def is_valid_baud(self, baud):
+        # Check if the selection is a valid baud rate
+        if baud in baud_rates:
+            return True
+        else:
+            return False
 
     def on_scan(self):
         self.dpd_port.clear()
