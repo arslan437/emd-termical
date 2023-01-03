@@ -1,8 +1,10 @@
 import sys
 import serial
+import serial.tools.list_ports
 import threading
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, QVBoxLayout
 from PyQt5.QtWidgets import QWidget, QComboBox, QHBoxLayout, QTextEdit
+from PyQt5 import QtGui, QtCore
 
 baud_rates = ["9600", "19200", "28800", "38400", "57600", "76800", "115200"]
 
@@ -16,75 +18,114 @@ class MyWindow(QMainWindow):
     def initUI(self):
 
         # Create the scan button
-        scan_button = QPushButton("Scan Ports")
-        scan_button.clicked.connect(self.on_scan)
+        self.btn_scan = QPushButton("Scan Ports")
+        self.btn_scan.clicked.connect(self.on_scan)
 
         # Create the port dropdown
-        port_dropdown = QComboBox()
-        port_dropdown.addItem("Select Port")
-        port_dropdown.setMinimumSize(100, 0)
+        self.dpd_port = QComboBox()
+        self.dpd_port.addItem("Select Port")
+        self.dpd_port.setMinimumSize(100, 0)
 
         # Create the baud rate dropdown
-        baud_dropdown = QComboBox()
-        baud_dropdown.addItem("Baud Rate")
+        self.dpd_baud = QComboBox()
+        self.dpd_baud.addItem("Baud Rate")
         for rate in baud_rates:
-            baud_dropdown.addItem(rate)
-        baud_dropdown.setMinimumSize(100, 0)
+            self.dpd_baud.addItem(rate)
+        self.dpd_baud.setMinimumSize(100, 0)
 
         # Create a "Connect" button
-        connect_button = QPushButton('Connect', self)
-        connect_button.clicked.connect(self.connect)
+        self.btn_connect = QPushButton('Connect', self)
+        self.btn_connect.clicked.connect(self.connect)
 
         # Create a "Jog up" button
-        jog_up_button = QPushButton('UP', self)
-        jog_up_button.clicked.connect(self.jogUp)
+        self.btn_up = QPushButton('UP', self)
+        self.btn_up.clicked.connect(self.jogUp)
+        self.btn_up.setEnabled(False)
 
         # Create a "Jog down" button
-        jog_down_button = QPushButton('DOWN', self)
-        jog_down_button.clicked.connect(self.jogDown)
+        self.btn_down = QPushButton('DOWN', self)
+        self.btn_down.clicked.connect(self.jogDown)
+        self.btn_down.setEnabled(False)
 
         # Create the clear button
-        clear_button = QPushButton("Clear")
-        clear_button.clicked.connect(self.on_clear)
+        self.btn_clear = QPushButton("Clear")
+        self.btn_clear.clicked.connect(self.on_clear)
 
         # Create the text box
-        text_box = QTextEdit()
+        self.txt_msg_box = QTextEdit()
 
-        # Create a vertical layout to hold the widgets
-        layout = QVBoxLayout()
-        layout.addChildWidget(scan_button)
-        layout.addChildWidget(port_dropdown)
-        layout.addChildWidget(baud_dropdown)
-        layout.addChildWidget(connect_button)
-        layout.addChildWidget(text_box)
-        layout.addChildWidget(clear_button)
+        # Create a vertical ly_controls to hold the widgets
+        ly_controls = QVBoxLayout()
+        ly_controls.addWidget(self.btn_scan)
+        ly_controls.addWidget(self.dpd_port)
+        ly_controls.addWidget(self.dpd_baud)
+        ly_controls.addWidget(self.btn_connect)
 
-        # Set the central widget to the layout
+        ly_controls.addWidget(self.btn_up)
+        ly_controls.addWidget(self.btn_down)
+
+        ly_controls.addWidget(self.txt_msg_box)
+        ly_controls.addWidget(self.btn_clear)
+
+        self.photo = QLabel()
+        self.photo.setMinimumHeight(500)
+        self.photo.setMinimumWidth(500)
+        self.photo.setText("")
+        self.photo.setStyleSheet("color: black")
+        self.photo.setPixmap(QtGui.QPixmap("cat.jpg"))
+
+        ly_image = QHBoxLayout()
+        ly_image.addLayout(ly_controls)
+        ly_image.addWidget(self.photo)
+        # Set the central widget to the ly_controls
         widget = QWidget(self)
-        widget.setLayout(layout)
+        widget.setLayout(ly_image)
         self.setCentralWidget(widget)
 
     def connect(self):
-        # Get the serial port and baud rate from the line edits
-        self.serial_port = self.serial_port_edit.text()
-        self.baud_rate = int(self.baud_rate_edit.text())
-
         # Open the serial port
-        self.serial = serial.Serial(self.serial_port, self.baud_rate)
+        self.serial = serial.Serial(self.dpd_port.currentText(), self.dpd_baud.currentText())
 
         # Start a thread to read incoming data from the serial port
-        t = threading.Thread(target=self.readSerial)
-        t.start()
+        self.t = threading.Thread(target=self.readSerial)
+        self.t.start()
+
+        # Update the UI
+        self.dpd_baud.setEnabled(False)
+        self.dpd_port.setEnabled(False)
+        self.btn_scan.setEnabled(False)
+        self.btn_down.setEnabled(True)
+        self.btn_up.setEnabled(True)
+        self.btn_connect.setText("Disconnect")
+        self.btn_connect.clicked.disconnect(self.connect)
+        self.btn_connect.clicked.connect(self.disconnect)
+
+    def disconnect(self):
+        # Stop the serial thread
+        # self.t.stop()
+        
+        # Close the serial port
+        self.serial.close()
+        
+        # Update the UI
+        self.dpd_baud.setEnabled(True)
+        self.dpd_port.setEnabled(True)
+        self.btn_scan.setEnabled(True)
+        self.btn_down.setEnabled(False)
+        self.btn_up.setEnabled(False)
+        self.btn_connect.setText("Connect")
+        self.btn_connect.clicked.disconnect(self.disconnect)
+        self.btn_connect.clicked.connect(self.connect)
 
     def on_scan(self):
-        port_dropdown.clear()
+        self.dpd_port.clear()
         ports = list(serial.tools.list_ports.comports())
         # print(ports)
         for port, _, _ in ports:
-            self.port_dropdown.addItem(port)
+            self.dpd_port.addItem(port)
 
     def on_clear(self):
-        self.text_box.clear()
+        self.txt_msg_box.clear()
 
     def jogUp(self):
         if not self.serial.isOpen():
