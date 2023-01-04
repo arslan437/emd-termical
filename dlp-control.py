@@ -6,67 +6,99 @@ import threading
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, QVBoxLayout
 from PyQt5.QtWidgets import QWidget, QComboBox, QHBoxLayout, QTextEdit, QMessageBox
 from PyQt5 import QtGui, QtCore
+from PyQt5.QtCore import pyqtSignal, QThread
 
 baud_rates = ["9600", "19200", "28800", "38400", "57600", "76800", "115200"]
+control_width = 150
 
+class serial_thread(QThread):
+    updateTextSignal = pyqtSignal(str)
+
+    def __init__(self, port, baud):
+        super().__init__()
+        # Open the serial port
+        self.serial = serial.Serial(port, baud)
+
+    def disconnect(self):
+        # Close the serial port
+        self.serial.close()
+
+    def run(self):
+            while True:
+                if not self.serial.isOpen():
+                    print("Getting out")
+                    break
+                # Read a line of data from the serial port
+                # data = self.serial.readline().strip()
+                data = self.serial.read().decode('utf-8')
+                # Print the data to the console
+                print(data)
+                # self.txt_msg_box.append(data)
+                self.updateTextSignal.emit(data)
 
 class MyWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.initUI()
         self.setWindowTitle("DLP Control")
+        self.initUI()
 
     def initUI(self):
-
         # Create the scan button
         self.btn_scan = QPushButton("Scan Ports")
         self.btn_scan.clicked.connect(self.on_scan)
+        self.btn_scan.setFixedWidth(control_width)
 
         # Create the port dropdown
         self.dpd_port = QComboBox()
         self.dpd_port.addItem("Select Port")
-        self.dpd_port.setMinimumSize(100, 0)
+        self.dpd_port.setFixedWidth(control_width)
 
         # Create the baud rate dropdown
         self.dpd_baud = QComboBox()
         self.dpd_baud.setCurrentIndex(0)
         for rate in baud_rates:
             self.dpd_baud.addItem(rate)
-        self.dpd_baud.setMinimumSize(100, 0)
+        self.dpd_baud.setFixedWidth(control_width)
 
         # Create a "Connect" button
         self.btn_connect = QPushButton('Connect', self)
         self.btn_connect.clicked.connect(self.connect)
+        self.btn_connect.setFixedWidth(control_width)
 
         # Create a "Jog up" button
         self.btn_up = QPushButton('UP', self)
         self.btn_up.clicked.connect(self.jogUp)
         self.btn_up.setEnabled(False)
+        self.btn_up.setFixedWidth(control_width)
 
         # Create a "Jog down" button
         self.btn_down = QPushButton('DOWN', self)
         self.btn_down.clicked.connect(self.jogDown)
         self.btn_down.setEnabled(False)
+        self.btn_down.setFixedWidth(control_width)
 
         # Create the clear button
         self.btn_clear = QPushButton("Clear")
         self.btn_clear.clicked.connect(self.on_clear)
+        self.btn_clear.setFixedWidth(control_width)
 
         # Create the text box
         self.txt_msg_box = QTextEdit()
+        self.txt_msg_box.setFixedWidth(250)
 
         # Create a vertical ly_controls to hold the widgets
         ly_controls = QVBoxLayout()
-        ly_controls.addWidget(self.btn_scan)
-        ly_controls.addWidget(self.dpd_port)
-        ly_controls.addWidget(self.dpd_baud)
-        ly_controls.addWidget(self.btn_connect)
+        ly_controls.setAlignment(QtCore.Qt.AlignHCenter)
+        ly_controls.addWidget(self.btn_scan, alignment= QtCore.Qt.AlignHCenter)
+        ly_controls.addWidget(self.dpd_port, alignment= QtCore.Qt.AlignHCenter)
+        ly_controls.addWidget(self.dpd_baud, alignment= QtCore.Qt.AlignHCenter)
+        ly_controls.addWidget(self.btn_connect, alignment= QtCore.Qt.AlignHCenter)
 
-        ly_controls.addWidget(self.btn_up)
-        ly_controls.addWidget(self.btn_down)
+        ly_controls.addWidget(self.btn_up, alignment= QtCore.Qt.AlignHCenter)
+        ly_controls.addWidget(self.btn_down, alignment= QtCore.Qt.AlignHCenter)
 
-        ly_controls.addWidget(self.txt_msg_box)
-        ly_controls.addWidget(self.btn_clear)
+        ly_controls.addWidget(self.txt_msg_box, alignment= QtCore.Qt.AlignHCenter)
+        ly_controls.addWidget(self.btn_clear, alignment= QtCore.Qt.AlignHCenter)
 
         self.photo = QLabel()
         self.photo.setMinimumHeight(500)
@@ -91,8 +123,10 @@ class MyWindow(QMainWindow):
         self.setCentralWidget(widget)
 
     def connect(self):
+        
         port =self.dpd_port.currentText() 
         baud = self.dpd_baud.currentText()
+        
 
         # Check if a valid port and baud rate are selected
         if not self.is_valid_port(port):
@@ -102,12 +136,13 @@ class MyWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "Please select a valid baud rate")
             return
 
-        # Open the serial port
-        self.serial = serial.Serial()
+        # Create the update text thread
+        # self.update_text_thread = serial_thread(port, baud)
+        self.update_text_thread = serial_thread(port, baud)
+        self.update_text_thread.updateTextSignal.connect(self.updateText)
 
-        # Start a thread to read incoming data from the serial port
-        self.t = threading.Thread(target=self.readSerial)
-        self.t.start()
+        # Start the thread
+        self.update_text_thread.start()
 
         # Update the UI
         self.dpd_baud.setEnabled(False)
@@ -120,12 +155,13 @@ class MyWindow(QMainWindow):
         self.btn_connect.clicked.connect(self.disconnect)
 
     def disconnect(self):
-        # Stop the serial thread
-        # self.t.stop()
         
-        # Close the serial port
-        self.serial.close()
-        
+        # self.update_text_thread.disconnect()
+        # self.update_text_thread.quit()
+        # self.update_text_thread.wait()
+        srl = self.update_text_thread.serial
+        srl.close()
+
         # Update the UI
         self.dpd_baud.setEnabled(True)
         self.dpd_port.setEnabled(True)
@@ -159,6 +195,9 @@ class MyWindow(QMainWindow):
 
     def on_clear(self):
         self.txt_msg_box.clear()
+    
+    def updateText(self, text):
+        self.txt_msg_box.append(text)
 
     def jogUp(self):
         if not self.serial.isOpen():
@@ -176,11 +215,15 @@ class MyWindow(QMainWindow):
 
         while True:
             if not self.serial.isOpen():
+                print("Getting out")
                 break
             # Read a line of data from the serial port
-            data = self.serial.readline().strip()
+            # data = self.serial.readline().strip()
+            data = self.serial.read().decode('utf-8')
             # Print the data to the console
             print(data)
+            # self.txt_msg_box.append(data)
+            self.updateTextSignal.emit(data)
 
 
 if __name__ == '__main__':
