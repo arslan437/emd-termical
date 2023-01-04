@@ -14,26 +14,30 @@ control_width = 150
 class serial_thread(QThread):
     updateTextSignal = pyqtSignal(str)
 
-    def __init__(self, port, baud):
+    def __init__(self, srl):
         super().__init__()
         # Open the serial port
-        self.serial = serial.Serial(port, baud)
-
-    def disconnect(self):
-        # Close the serial port
-        self.serial.close()
+        # self.serial = serial.Serial(port, baud)
+        self.serial = srl
 
     def run(self):
             while True:
                 if not self.serial.isOpen():
                     print("Getting out")
                     break
-                # Read a line of data from the serial port
-                # data = self.serial.readline().strip()
-                data = self.serial.read().decode('utf-8')
-                # Print the data to the console
+
+                try:
+                    data = self.serial.readline()
+                    data = data.decode('utf-8')
+                except serial.serialutil.SerialException as e:
+                    # Show an error message if the connection fails
+                    QMessageBox.warning(self, "Error", str(e))
+                    break
+
+                if data[-1] == '\n':
+                    data = data[:-1]
+                    
                 print(data)
-                # self.txt_msg_box.append(data)
                 self.updateTextSignal.emit(data)
 
 class MyWindow(QMainWindow):
@@ -136,9 +140,10 @@ class MyWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "Please select a valid baud rate")
             return
 
+        self.serialobj = serial.Serial(port, baud)
         # Create the update text thread
         # self.update_text_thread = serial_thread(port, baud)
-        self.update_text_thread = serial_thread(port, baud)
+        self.update_text_thread = serial_thread(self.serialobj)
         self.update_text_thread.updateTextSignal.connect(self.updateText)
 
         # Start the thread
@@ -156,11 +161,17 @@ class MyWindow(QMainWindow):
 
     def disconnect(self):
         
-        # self.update_text_thread.disconnect()
-        # self.update_text_thread.quit()
-        # self.update_text_thread.wait()
-        srl = self.update_text_thread.serial
-        srl.close()
+        self.update_text_thread.terminate()
+
+        # Try to open a connection to the serial port
+        try:
+            self.serialobj.close()
+        except serial.serialutil.SerialException as e:
+            # Show an error message if the connection fails
+            QMessageBox.warning(self, "Error", str(e))
+            return
+
+        # self.serialobj.close()
 
         # Update the UI
         self.dpd_baud.setEnabled(True)
@@ -197,7 +208,9 @@ class MyWindow(QMainWindow):
         self.txt_msg_box.clear()
     
     def updateText(self, text):
-        self.txt_msg_box.append(text)
+        # self.txt_msg_box.append(text)
+        self.txt_msg_box.moveCursor(QtGui.QTextCursor.End)
+        self.txt_msg_box.insertPlainText(text)
 
     def jogUp(self):
         if not self.serial.isOpen():
