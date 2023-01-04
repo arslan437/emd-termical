@@ -88,7 +88,10 @@ class MyWindow(QMainWindow):
 
         # Create the text box
         self.txt_msg_box = QTextEdit()
-        self.txt_msg_box.setFixedWidth(250)
+        self.txt_msg_box.setLineWrapMode(QTextEdit.NoWrap)
+        # self.txt_msg_box.setMinimumWidth(300)
+        # self.txt_msg_box.setMaximumWidth(500)
+
 
         # Create a vertical ly_controls to hold the widgets
         ly_controls = QVBoxLayout()
@@ -101,7 +104,7 @@ class MyWindow(QMainWindow):
         ly_controls.addWidget(self.btn_up, alignment= QtCore.Qt.AlignHCenter)
         ly_controls.addWidget(self.btn_down, alignment= QtCore.Qt.AlignHCenter)
 
-        ly_controls.addWidget(self.txt_msg_box, alignment= QtCore.Qt.AlignHCenter)
+        ly_controls.addWidget(self.txt_msg_box)
         ly_controls.addWidget(self.btn_clear, alignment= QtCore.Qt.AlignHCenter)
 
         self.photo = QLabel()
